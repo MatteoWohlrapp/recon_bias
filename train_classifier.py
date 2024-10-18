@@ -8,7 +8,7 @@ import yaml
 from torch.utils.data import DataLoader
 
 # Import your dataset, models, and trainer
-from src.data.classification_dataset import ClassificationDataset
+from src.data.classification_dataset import ClassificationDataset, KSpaceClassificationDataset
 from src.data.dataset import create_balanced_sampler
 from src.model.classification.classification_model import (AgeCEClassifier,
                                                            GenderBCEClassifier,
@@ -78,7 +78,7 @@ def main():
     )
 
     # Datasets and DataLoaders
-    train_dataset = ClassificationDataset(
+    train_dataset = KSpaceClassificationDataset(
         data_root=data_root,
         transform=transform,
         split="train",
@@ -91,7 +91,7 @@ def main():
         age_bins=age_bins,
         os_bins=os_bins,
     )
-    val_dataset = ClassificationDataset(
+    val_dataset = KSpaceClassificationDataset(
         data_root=data_root,
         transform=transform,
         split="val",

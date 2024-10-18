@@ -19,14 +19,20 @@ class ResNetClassifierNetwork(nn.Module):
         # Average the weights across the RGB channels to initialize the new conv1
         weight = self.classifier.conv1.weight
         self.classifier.conv1 = nn.Conv2d(
-            in_channels=1,
+            in_channels=2,
             out_channels=self.classifier.conv1.out_channels,
             kernel_size=self.classifier.conv1.kernel_size,
             stride=self.classifier.conv1.stride,
             padding=self.classifier.conv1.padding,
             bias=False,
         )
-        self.classifier.conv1.weight = nn.Parameter(weight.mean(dim=1, keepdim=True))
+        # Initialize the new weights by averaging across the first 2 channels of the original weights
+        if weight.size(1) == 3:
+            new_weight = weight[:, :2, :, :]  # Take the first 2 channels of the original 3
+        else:
+            new_weight = weight[:, :2, :, :].mean(dim=1, keepdim=True).repeat(1, 2, 1, 1)
+
+        self.classifier.conv1.weight = nn.Parameter(new_weight)
 
         # Remove the existing fully connected layer
         num_ftrs = self.classifier.fc.in_features

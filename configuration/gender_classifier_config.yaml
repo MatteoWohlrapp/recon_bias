@@ -1,5 +1,5 @@
 output_dir: './output'
-output_name: 'gender-rebalanced'
+output_name: 'gender-rebalanced-kspace'
 save_interval: 1
 
 num_epochs: 20

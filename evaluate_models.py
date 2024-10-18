@@ -10,7 +10,7 @@ import torchvision.transforms as transforms
 import yaml
 from torch import nn
 
-from src.data.classification_dataset import ClassificationDataset
+from src.data.classification_dataset import ClassificationDataset, KSpaceClassificationDataset
 from src.data.reconstruction_dataset import ReconstructionDataset
 from src.evaluation.classifier_prediction import classifier_predictions
 from src.evaluation.evaluation import (classifier_evaluation,
@@ -167,7 +167,7 @@ def main():
     seed = config.get("seed", 42)
 
     # Process classifiers
-    classifier_dataset = ClassificationDataset(
+    classifier_dataset = KSpaceClassificationDataset(
         data_root=data_root,
         transform=transform,
         split="test",

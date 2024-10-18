@@ -19,6 +19,7 @@ def process_patient_data(
     patient_reconstruction_data,
     classifiers: List[dict],
     reconstruction_model: Optional[torch.nn.Module] = None,
+    classification_dataset=None,
 ) -> dict:
     """Process each patient, returning a dictionary of results."""
 
@@ -52,6 +53,8 @@ def process_patient_data(
                 x_recon, _ = patient_reconstruction_data[i]
                 x_recon = x_recon.unsqueeze(0)
                 recon_image = reconstruction_model(x_recon)
+                recon_image = classification_dataset.get_k_space(recon_image)
+                recon_image = recon_image.unsqueeze(0)
                 recon_output = classifier(recon_image)
                 recon_score = classifier.final_activation(recon_output)
                 patient_recon_scores.append(recon_score.item())
