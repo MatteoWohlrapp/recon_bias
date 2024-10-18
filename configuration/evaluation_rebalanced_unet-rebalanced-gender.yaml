@@ -1,0 +1,25 @@
+data_root: "../../data/UCSF-PDGM"
+output_dir: "./output"
+output_name: "evaluation-rebalanced-unet-rebalanced-gender-plots"
+seed: 42
+os_bins: 4 
+age_bins: [0, 58, 100]
+reconstruction: 
+  lower_slice: 60
+  upper_slice: 130
+  sampling_mask: "radial"
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  model: 
+    - network: "UNet"
+      model_path: "TODO"
+classifiers:
+  lower_slice: 60
+  upper_slice: 130
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  models: 
+    - type: "GenderBCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/gender-rebalanced_20241015_143831/checkpoints/gender-rebalanced_20241015_143831_epoch_1_best.pth"
+

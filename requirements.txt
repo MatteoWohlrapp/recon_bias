@@ -18,3 +18,6 @@ fastmri
 lifelines
 pillow 
 pdf2image
+torchvision
+torchcam
+opencv-python

@@ -1,0 +1,37 @@
+data_root: "../../data/UCSF-PDGM"
+output_dir: "./output"
+output_name: "evaluation-rebalanced-unet-linear-plots"
+seed: 42
+os_bins: 4 
+age_bins: [0, 58, 100]
+reconstruction: 
+  lower_slice: 60
+  upper_slice: 130
+  sampling_mask: "radial"
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  model: 
+    - network: "UNet"
+      model_path: "../../models/unet-linear_20241017_145102/checkpoints/unet-linear_20241017_145102_epoch_10_best.pth"
+classifiers:
+  lower_slice: 60
+  upper_slice: 130
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  models: 
+    - type: "TGradeBCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/tgrade-rebalanced_20241015_143438/checkpoints/tgrade-rebalanced_20241015_143438_epoch_6_best.pth"
+    - type: "TTypeBCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/ttype-rebalanced_20241015_143317/checkpoints/ttype-rebalanced_20241015_143317_epoch_1_best.pth"
+    - type: "NLLSurvClassifier"
+      network: "ResNet18"
+      model_path: "../../models/os-rebalanced_20241015_151610/checkpoints/os-rebalanced_20241015_151610_epoch_1_best.pth"
+    - type: "AgeCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/age-rebalanced_20241015_151516/checkpoints/age-rebalanced_20241015_151516_epoch_1_best.pth"
+    - type: "GenderBCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/gender-rebalanced_20241015_143831/checkpoints/gender-rebalanced_20241015_143831_epoch_1_best.pth"
+

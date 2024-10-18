@@ -1,0 +1,34 @@
+data_root: "../../data/UCSF-PDGM"
+output_dir: "./output"
+output_name: "gradcam-unbalanced"
+seed: 42
+os_bins: 4 
+age_bins: [0, 58, 100]
+patient_ids: ["UCSF-PDGM-445", "UCSF-PDGM-253", "UCSF-PDGM-053", "UCSF-PDGM-076", "UCSF-PDGM-113", "UCSF-PDGM-318", "UCSF-PDGM-414", "UCSF-PDGM-133"]
+reconstruction: 
+  sampling_mask: "radial"
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  model: 
+    - network: "UNet"
+      model_path: "../../models/unet/checkpoints/unet_20240927_164753_epoch_8_best.pth"
+classifiers:
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  models: 
+    - type: "TGradeBCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/tgrade/checkpoints/tgrade_test_20240925_113550_epoch_1_best.pth"
+    - type: "TTypeBCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/ttype/checkpoints/ttype_test_20240925_113544_epoch_1_best.pth"
+    - type: "NLLSurvClassifier"
+      network: "ResNet18"
+      model_path: "../../models/os18/checkpoints/os_20241003_235554_epoch_1_best.pth"
+    - type: "AgeCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/age/checkpoints/age-60_20241007_103705_epoch_1_best.pth"
+    - type: "GenderBCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/gender/checkpoints/gender_20241002_140300_epoch_1_best.pth"
+

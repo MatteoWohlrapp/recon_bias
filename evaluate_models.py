@@ -235,7 +235,7 @@ def main():
             reconstruction_model = load_reconstruction_model(
                 network_type, model_path, device
             )
-            reconstruction = {"model": reconstruction_model, "name": network_type}
+            reconstruction = {"model": reconstruction_model, "name": reconstruction_model.name}
         else:
             print(
                 "Reconstruction model configuration is incomplete or missing required fields."
