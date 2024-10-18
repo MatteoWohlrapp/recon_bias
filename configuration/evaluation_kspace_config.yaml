@@ -1,0 +1,28 @@
+data_root: "../../data/UCSF-PDGM"
+output_dir: "./output"
+output_name: "evaluation-kspace-plots"
+seed: 42
+os_bins: 4 
+age_bins: [0, 58, 100]
+reconstruction: 
+  lower_slice: 60
+  upper_slice: 130
+  sampling_mask: "radial"
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  model: 
+    - network: "UNet"
+      model_path: "../../models/unet/checkpoints/unet_20240927_164753_epoch_8_best.pth"
+classifiers:
+  lower_slice: 60
+  upper_slice: 130
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  models: 
+    - type: "AgeCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/age-rebalanced-kspace_20241017_164023/checkpoints/age-rebalanced-kspace_20241017_164023_epoch_1_best.pth"
+    - type: "GenderBCEClassifier"
+      network: "ResNet18"
+      model_path: "../../models/gender-rebalanced-kspace_20241017_164123/checkpoints/gender-rebalanced-kspace_20241017_164123_epoch_3_best.pth"
+

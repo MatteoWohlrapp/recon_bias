@@ -5,7 +5,6 @@ seed: 42
 os_bins: 4 
 age_bins: [0, 58, 100]
 reconstruction: 
-  #results_path: "./output/reconstruction-csv_20241008_161359/reconstruction-csv_20241008_161359_reconstruction_results.csv" #If specified predictions will be loaded from this path
   lower_slice: 60
   upper_slice: 130
   sampling_mask: "radial"
@@ -13,10 +12,8 @@ reconstruction:
   pathology: ["edema","non_enhancing"]
   model: 
     - network: "UNet"
-      model_path: "./models/unet/checkpoints/unet_20240927_164753_epoch_8_best.pth"
+      model_path: "../../models/unet/checkpoints/unet_20240927_164753_epoch_8_best.pth"
 classifiers:
-  results_path: "./output/evaluation-rebalanced_20241016_085401/evaluation-rebalanced_20241016_085401_classifier_results.csv" #If specified predictions will be loaded from this path
-  #results_path: "/lotterlab/users/matteo/code/recon_bias/output/classification-csv_20241008_161603_classifier_results.csv"
   lower_slice: 60
   upper_slice: 130
   type: "T2"

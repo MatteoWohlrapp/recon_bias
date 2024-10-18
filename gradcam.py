@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
-from src.data.classification_dataset import ClassificationDataset
+from src.data.classification_dataset import KSpaceClassificationDataset
 from src.data.dataset import create_balanced_sampler
 from src.model.classification.classification_model import (AgeCEClassifier,
                                                            GenderBCEClassifier,
@@ -187,6 +187,7 @@ def process_patient(
     classifier: dict,
     reconstruction_model: Optional[torch.nn.Module],
     output_path: str,
+    classification_dataset,
 ) -> dict:
     """Process each patient, returning a dictionary of results."""
 
@@ -204,8 +205,11 @@ def process_patient(
     y_class = classifier_model(x)
     x_recon, _ = patient_reconstruction_data[slice]
     x_recon = x_recon.unsqueeze(0)
-    y_recon = classifier_model(x_recon)
     reconstructed_image = reconstruction_model(x_recon)
+    reconstructed_image = reconstructed_image.squeeze()
+    reconstructed_image = classification_dataset.get_kspace(reconstructed_image)
+    reconstructed_image = reconstructed_image.unsqueeze(0)
+    y_recon = classifier_model(reconstructed_image)
 
     gt_img = transforms.ToPILImage()(x.squeeze().cpu())
     result = apply_gradcam(classifier_model, x, index)
@@ -259,7 +263,8 @@ def apply_gradcam_to_models(
             patient_reconstruction_data,
             classifier,
             reconstruction_model,
-            output_path=data_root
+            output_path=data_root,
+            classification_dataset=classification_dataset
         )
 
     return patient_predictions
@@ -322,7 +327,7 @@ if __name__ == "__main__":
     seed = config.get("seed", 42)
 
     # Process classifiers
-    classifier_dataset = ClassificationDataset(
+    classifier_dataset = KSpaceClassificationDataset(
         data_root=data_root,
         transform=transform,
         split="test",

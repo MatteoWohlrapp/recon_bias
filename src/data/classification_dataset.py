@@ -161,8 +161,6 @@ class KSpaceClassificationDataset(BaseDataset):
 
         kspace = self.get_kspace(slice_tensor)
 
-        kspace = kspace.permute(2, 0, 1)
-
         return kspace, labels
 
     def get_random_sample(self):
@@ -242,5 +240,7 @@ class KSpaceClassificationDataset(BaseDataset):
 
         # Perform Fourier transform to go from image space to k-space
         kspace = fft2c(complex_slice)
+
+        kspace = kspace.permute(2, 0, 1)
 
         return kspace

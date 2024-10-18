@@ -53,7 +53,8 @@ def process_patient_data(
                 x_recon, _ = patient_reconstruction_data[i]
                 x_recon = x_recon.unsqueeze(0)
                 recon_image = reconstruction_model(x_recon)
-                recon_image = classification_dataset.get_k_space(recon_image)
+                recon_image = recon_image.squeeze()
+                recon_image = classification_dataset.get_kspace(recon_image)
                 recon_image = recon_image.unsqueeze(0)
                 recon_output = classifier(recon_image)
                 recon_score = classifier.final_activation(recon_output)
@@ -116,6 +117,7 @@ def classifier_predictions(
             patient_reconstruction_data,
             classifiers,
             reconstruction_model,
+            classification_dataset,
         )
         patient_predictions.append(patient_prediction)
 

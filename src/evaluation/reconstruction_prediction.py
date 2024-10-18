@@ -66,9 +66,9 @@ def process_patient_data(
     aggregated_nrmse = np.mean(nrmse_values)
 
     # Store the aggregated results in the patient info
-    patient_info[f"{reconstruction_model["model"].name}_psnr"] = aggregated_psnr
-    patient_info[f"{reconstruction_model["model"].name}_ssim"] = aggregated_ssim
-    patient_info[f"{reconstruction_model["model"].name}nrmse"] = aggregated_nrmse
+    patient_info[f"{reconstruction_model['model'].name}_psnr"] = aggregated_psnr
+    patient_info[f"{reconstruction_model['model'].name}_ssim"] = aggregated_ssim
+    patient_info[f"{reconstruction_model['model'].name}_nrmse"] = aggregated_nrmse
 
     return patient_info
 

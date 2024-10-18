@@ -284,6 +284,7 @@ def main():
     # Evaluate predictions
     classifier_evaluation(classifier_results_df, classifiers, age_bins, output_path)
 
+    """
     if reconstruction is None:
         print("No reconstruction model specified. Skipping reconstruction evaluation.")
         return
@@ -313,7 +314,7 @@ def main():
     # Evaluate predictions
     reconstruction_evaluation(
         reconstruction_results_df, reconstruction, age_bins, output_path
-    )
+    )"""
 
 
 if __name__ == "__main__":
