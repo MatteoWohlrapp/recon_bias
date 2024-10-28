@@ -4,7 +4,7 @@ output_name: "gradcam-kspace"
 seed: 42
 os_bins: 4 
 age_bins: [0, 58, 100]
-patient_ids: ["UCSF-PDGM-445", "UCSF-PDGM-253", "UCSF-PDGM-053", "UCSF-PDGM-076", "UCSF-PDGM-113", "UCSF-PDGM-318", "UCSF-PDGM-414", "UCSF-PDGM-133"]
+patient_ids: ["UCSF-PDGM-445", "UCSF-PDGM-253", "UCSF-PDGM-485", "UCSF-PDGM-076", "UCSF-PDGM-113", "UCSF-PDGM-318", "UCSF-PDGM-414", "UCSF-PDGM-133"]
 reconstruction: 
   sampling_mask: "radial"
   type: "T2"
