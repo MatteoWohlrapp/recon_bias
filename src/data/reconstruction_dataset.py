@@ -31,6 +31,9 @@ class ReconstructionDataset(BaseDataset):
         evaluation=False,
         age_bins=[0, 68, 100],
         sampling_mask: Optional[str] = "radial",
+        age_skew: Optional[tuple] = None,  
+        gender_skew: Optional[tuple] = None, 
+        ttype_skew: Optional[tuple] = None
     ):
         """
         Initialize the MRIDataset.
@@ -54,6 +57,9 @@ class ReconstructionDataset(BaseDataset):
             upper_slice=upper_slice,
             evaluation=evaluation,
             age_bins=age_bins,
+            age_skew=age_skew,
+            gender_skew=gender_skew, 
+            ttype_skew=ttype_skew
         )
 
     def convert_to_complex(self, image_slice):

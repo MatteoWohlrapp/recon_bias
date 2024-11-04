@@ -24,6 +24,9 @@ class BaseDataset(Dataset, ABC):
         upper_slice=None,
         evaluation=False,
         age_bins=[0, 68, 100],
+        age_skew: Optional[tuple] = None,  # (young_percentage, old_percentage)
+        gender_skew: Optional[tuple] = None,  # (male_percentage, female_percentage)
+        ttype_skew: Optional[tuple] = None  # (ttype1_percentage, ttype2_percentage)
     ):
         self.data_root = data_root
         self.transform = transform
@@ -36,49 +39,87 @@ class BaseDataset(Dataset, ABC):
         self.upper_slice = upper_slice
         self.evaluation = evaluation
         self.age_bins = age_bins
+        self.age_skew = age_skew
+        self.gender_skew = gender_skew
+        self.ttype_skew = ttype_skew
         self.metadata: pl.LazyFrame = pl.scan_csv(data_root + "/metadata.csv")
         self.data = self._prepare_metadata()
 
     def _prepare_metadata(self):
-        """Prepare the metadata for the dataset.
+        """Prepare the metadata for the dataset with skew based on age or gender if specified."""
 
-        This is done by creating a DataFrame that contains the metadata and paths to the relevant files.
-
-        Returns:
-            None
-        """
+        # Filter data based on the split, type, and pathology
         self.metadata = self.metadata.filter(pl.col("split") == self.split)
         self.metadata = self.metadata.filter(pl.col("type") == self.type)
-
-        # Filter by pathology OR
-        if (
-            self.pathology and len(self.pathology) > 0
-        ):  # Ensure pathology list is not empty
+        
+        if self.pathology and len(self.pathology) > 0:  # Ensure pathology list is not empty
             pathology_filter = pl.col(self.pathology[0]) == True
             for path in self.pathology[1:]:
                 pathology_filter |= pl.col(path) == True
-
             self.metadata = self.metadata.filter(pathology_filter)
 
         if self.lower_slice:
             self.metadata = self.metadata.filter(pl.col("slice_id") >= self.lower_slice)
-
         if self.upper_slice:
             self.metadata = self.metadata.filter(pl.col("slice_id") <= self.upper_slice)
 
-        if self.number_of_samples and not self.evaluation:
-            self.metadata = self.metadata.collect().sample(
-                n=self.number_of_samples, seed=self.seed
-            )
+        if self.age_skew:
+            print(f"Sampling based on age skew: {self.age_skew}")
+            # Separate data by age
+            young = self.metadata.filter(pl.col("age_at_mri") <= 58).collect()
+            old = self.metadata.filter(pl.col("age_at_mri") > 58).collect()
+
+            # Sample based on specified age skew
+            young_sample_size = int(self.age_skew[0] * len(young))
+            old_sample_size = int(self.age_skew[1] * len(old))
+
+            young_sampled = young.sample(n=young_sample_size, seed=self.seed)
+            old_sampled = old.sample(n=old_sample_size, seed=self.seed)
+
+            self.metadata = pl.concat([young_sampled, old_sampled])
+
+        elif self.gender_skew:
+            print(f"Sampling based on gender skew: {self.gender_skew}")
+            # Separate data by gender
+            male = self.metadata.filter(pl.col("sex") == "M").collect()
+            female = self.metadata.filter(pl.col("sex") == "F").collect()
+
+            # Sample based on specified gender skew
+            male_sample_size = int(self.gender_skew[0] * len(male))
+            female_sample_size = int(self.gender_skew[1] * len(female))
+
+            male_sampled = male.sample(n=male_sample_size, seed=self.seed)
+            female_sampled = female.sample(n=female_sample_size, seed=self.seed)
+
+            self.metadata = pl.concat([male_sampled, female_sampled])
+        elif self.ttype_skew:
+            print(f"Sampling based on tumor type skew: {self.ttype_skew}")
+            # Separate data by tumor type
+            ttype1 = self.metadata.filter(pl.col("final_diagnosis") == "Glioblastoma, IDH-wildtype").collect()
+            ttype2 = self.metadata.filter(pl.col("final_diagnosis") != "Glioblastoma, IDH-wildtype").collect()
+
+            # Sample based on specified tumor type skew
+            ttype1_sample_size = int(self.ttype_skew[0] * len(ttype1))
+            ttype2_sample_size = int(self.ttype_skew[1] * len(ttype2))
+
+            ttype1_sampled = ttype1.sample(n=ttype1_sample_size, seed=self.seed)
+            ttype2_sampled = ttype2.sample(n=ttype2_sample_size, seed=self.seed)
+
+            self.metadata = pl.concat([ttype1_sampled, ttype2_sampled])
         else:
-            self.metadata = self.metadata.collect()
+            # Default 50/50 sampling for age as fallback if no skew specified
+            young = self.metadata.filter(pl.col("age_at_mri") <= 58).collect()
+            old = self.metadata.filter(pl.col("age_at_mri") > 58).collect()
+            sample_size = int(0.5 * len(old))
+
+            old_sampled = old.sample(n=sample_size, seed=42)
+            self.metadata = pl.concat([young, old_sampled])
 
     def __len__(self):
         return len(self.metadata)
 
     def __getitem__(self, idx: int):
         row = self.metadata.row(idx, named=True)
-
         return self._get_item_from_row(row)
 
     @abstractmethod
@@ -120,7 +161,7 @@ def create_balanced_sampler(dataset, classifier):
     sampler = WeightedRandomSampler(
         weights=sample_weights,
         num_samples=len(sample_weights),
-        replacement=True,  # Sample with replacement to ensure balanced sampling
+        replacement=True  # Sample with replacement to ensure balanced sampling
     )
 
     return sampler

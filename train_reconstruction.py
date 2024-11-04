@@ -59,6 +59,9 @@ def main():
     upper_slice = config.get("upper_slice", None)
     rebalancing = config.get("rebalancing", None)
     age_bins = config.get("age_bins", [0, 58, 100])
+    age_skew = config.get("age_skew", None)
+    gender_skew = config.get("gender_skew", None)
+    ttype_skew = config.get("ttype_skew", None)
 
     # Append timestamp to output_name to make it unique
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -92,6 +95,9 @@ def main():
         lower_slice=lower_slice,
         upper_slice=upper_slice,
         age_bins=age_bins,
+        age_skew=age_skew,
+        gender_skew=gender_skew, 
+        ttype_skew=ttype_skew
     )
     val_dataset = ReconstructionDataset(
         data_root=data_root,
@@ -105,6 +111,9 @@ def main():
         lower_slice=lower_slice,
         upper_slice=upper_slice,
         age_bins=age_bins,
+        age_skew=age_skew,
+        gender_skew=gender_skew, 
+        ttype_skew=ttype_skew
     )
 
     val_sampler = None

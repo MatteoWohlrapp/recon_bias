@@ -1,13 +1,14 @@
-output_dir: './output'
-output_name: 'unet-40'
-save_interval: 1
+output_dir: './output_skewed'
+output_name: 'unet'
+save_interval: 5
 
 num_epochs: 20
 learning_rate: 0.0001
 batch_size: 8
-early_stopping_patience: 5
+early_stopping_patience: 3
 
 data_root: '../../data/UCSF-PDGM'
+pathology: ["edema","non_enhancing"]
 type: 'T2'
 lower_slice: 60
 upper_slice: 130
