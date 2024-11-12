@@ -107,13 +107,7 @@ class BaseDataset(Dataset, ABC):
 
             self.metadata = pl.concat([ttype1_sampled, ttype2_sampled])
         else:
-            # Default 50/50 sampling for age as fallback if no skew specified
-            young = self.metadata.filter(pl.col("age_at_mri") <= 58).collect()
-            old = self.metadata.filter(pl.col("age_at_mri") > 58).collect()
-            sample_size = int(0.5 * len(old))
-
-            old_sampled = old.sample(n=sample_size, seed=42)
-            self.metadata = pl.concat([young, old_sampled])
+            self.metadata = self.metadata.collect()
 
     def __len__(self):
         return len(self.metadata)
