@@ -3,15 +3,21 @@ import os
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-
+import warnings
+from src.model.reconstruction.style_ganv2 import Discriminator, Generator, ResNetEncoder
+from torch import nn, optim
+import torch.nn.functional as F
+from math import log2
+from torch.utils.data import DataLoader
 
 class Trainer:
     def __init__(
         self,
         model,
+        samples,
         train_loader,
+        train_dataset,
         val_loader,
-        optimizer,
         num_epochs,
         device,
         log_dir,
@@ -36,10 +42,41 @@ class Trainer:
             save_interval (int, optional): Interval (in epochs) to save model checkpoints. Defaults to 1.
             early_stopping_patience (int, optional): Number of epochs with no improvement after which training will be stopped. If None, early stopping is disabled.
         """
-        self.model = model.to(device)
+        self.samples = samples
+        self.model = model
+        self.critic = Discriminator(512, 1)
+        self.enc = ResNetEncoder(512)
+        self.gen = Generator(512, 512, 512, 1)
+        self.step = None
+        self.opt_gen = optim.Adam([{'params': [param for name, param in self.gen.named_parameters() if 'map' not in name]},
+                     {'params': self.gen.map.parameters(), 'lr': 1e-5}], lr=1e-3, weight_decay=1e-4)
+        self.opt_critic = optim.Adam(
+                self.critic.parameters(), lr= 1e-3, weight_decay=1e-4
+        )
+        self.train_alpha = 1e-7
+        self.val_alpha = 1e-7
+        self.train_step = 0
+        self.val_step = 0
+        self.BATCH_SIZES = [256,256,128,64,32,16, 8]
+        self.PROGRESSIVE_EPOCHS = [30] * len(self.BATCH_SIZES)
+        self.START_TRAIN_IMG_SIZE = 4
+        self.train_dataset = train_dataset
+        """
+        DATSET = '/kaggle/input/women-clothes'
+        START_TRAIN_IMG_SIZE = 4
+        DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+        LR = 1e-3
+        BATCH_SIZES = [256,256,128,64,32,16]
+        CHANNELS_IMG = 3
+        Z_DIm = 512
+        W_DIM = 512
+        IN_CHANNELS = 512
+        LAMBDA_GP = 10
+        PROGRESSIVE_EPOCHS = [30] * len(BATCH_SIZES)
+        """
+        self.criterion = torch.nn.BCEWithLogitsLoss()
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.optimizer = optimizer
         self.num_epochs = num_epochs
         self.device = device
         self.log_dir = log_dir
@@ -64,61 +101,158 @@ class Trainer:
         self.best_model_state = None  # To store the best model's state_dict
         self.best_epoch = None  # To store the epoch number of the best model
 
+
+    def gradient_penalty(self, real, fake, alpha, train_step, device="cpu"):
+        BATCH_SIZE, C, H, W = real.shape
+        beta = torch.rand((BATCH_SIZE, 1, 1, 1)).repeat(1, C, H, W).to(device)
+        interpolated_images = real * beta + fake.detach() * (1 - beta)
+        interpolated_images.requires_grad_(True)
+
+        # Calculate critic scores
+        mixed_scores = self.critic(interpolated_images, alpha, train_step)
+    
+        # Take the gradient of the scores with respect to the images
+        gradient = torch.autograd.grad(
+            inputs=interpolated_images,
+            outputs=mixed_scores,
+            grad_outputs=torch.ones_like(mixed_scores),
+            create_graph=True,
+            retain_graph=True,
+        )[0]
+        gradient = gradient.view(gradient.shape[0], -1)
+        gradient_norm = gradient.norm(2, dim=1)
+        gradient_penalty = torch.mean((gradient_norm - 1) ** 2)
+        return gradient_penalty
+    
+    def get_loader(self, image_size, step):
+        batch_size = self.BATCH_SIZES[step]
+        loader = DataLoader(
+            self.train_dataset,
+            batch_size=batch_size,
+            shuffle=True
+        )
+        return loader
+    
     def train(self):
-        for epoch in range(1, self.num_epochs + 1):
-            # Training phase
-            train_loss, train_metric = self.train_epoch(epoch)
+        step = int(log2(self.START_TRAIN_IMG_SIZE / 4))
 
-            # Validation phase
-            val_loss, val_metric = self.validate_epoch(epoch)
+        for num_epochs in self.PROGRESSIVE_EPOCHS[step:]:
+            alpha = 1e-7
+            image_size = 4*2**step
+            self.train_loader = self.get_loader(image_size, step)
+            print('Curent image size: '+str(image_size))
 
-            # Log metrics
-            self.writer.add_scalars(
-                "Loss", {"Train": train_loss, "Validation": val_loss}, epoch
+            for epoch in range(num_epochs):
+                alpha = self.train_fn(epoch, step, image_size, alpha)
+                
+                if epoch % 5 == 0: 
+                    self.save_snapshot(epoch, image_size, step, alpha)
+            step +=1
+
+    def train_fn(
+        self, epoch, step, image_size, alpha
+    ):
+        train_bar = tqdm(
+            self.train_loader, desc=f"Epoch {epoch}/{self.PROGRESSIVE_EPOCHS[step]}, Step {step}/{len(self.PROGRESSIVE_EPOCHS) - 1} [Training]"
+        )
+        for inputs, labels in train_bar:
+            inputs = inputs.to(self.device)
+            labels = labels.to(self.device)
+
+            inputs = F.interpolate(inputs, size=(image_size, image_size), mode='bilinear', align_corners=False)
+            labels = F.interpolate(labels, size=(image_size, image_size), mode='bilinear', align_corners=False)
+
+
+            cur_batch_size = inputs.shape[0]
+            noise = torch.randn(cur_batch_size, 512).to(self.device)
+            fake  = self.gen(noise, alpha, step)
+            critic_real = self.critic(labels, alpha, step)
+            critic_fake = self.critic(fake.detach(), alpha, step)
+            gp = self.gradient_penalty(labels, fake, alpha, step, self.device)
+            loss_critic = (
+                -(torch.mean(critic_real) - torch.mean(critic_fake))
+                + 10 * gp
+                + (0.001) * torch.mean(critic_real ** 2)
             )
-            self.writer.add_scalars(
-                f"{self.model.performance_metric_name}",
-                {"Train": train_metric, "Validation": val_metric},
-                epoch,
+
+            self.critic.zero_grad()
+            loss_critic.backward()
+            self.opt_critic.step()
+
+            gen_fake = self.critic(fake, alpha, step)
+            loss_gen = -torch.mean(gen_fake)
+
+            self.gen.zero_grad()
+            loss_gen.backward()
+            self.opt_gen.step()
+
+            alpha += cur_batch_size / (
+                self.PROGRESSIVE_EPOCHS[step] * 0.5 * self.samples
             )
+            alpha = min(alpha,1)
 
-            # Save checkpoint at specified intervals
-            if epoch % self.save_interval == 0:
-                self.save_checkpoint(epoch)
-                self.save_snapshot(epoch)
 
-            # Early stopping check
-            if val_loss < self.best_val_loss:
-                self.best_val_loss = val_loss
-                self.best_model_state = (
-                    self.model.state_dict()
-                )  # Store the model's state_dict
-                self.best_epoch = epoch
-                self.epochs_without_improvement = 0
-            else:
-                self.epochs_without_improvement += 1
-                if (
-                    self.early_stopping_patience is not None
-                    and self.epochs_without_improvement >= self.early_stopping_patience
-                ):
-                    print(
-                        f"Early stopping triggered after {self.early_stopping_patience} epochs with no improvement."
-                    )
-                    break
+            train_bar.set_postfix(
+                gp = gp.item(),
+                loss_critic = loss_critic.item(), 
+                loss_gen = loss_gen.item(),
+            )
+        return alpha  
+          
+        """
+        train_loss_d, train_loss_g = self.train_epoch(epoch)
 
-        # Save the final model
-        self.save_checkpoint(epoch, final=True)
+        # Validation phase
+        val_loss_d, val_loss_g = self.validate_epoch(epoch)
 
-        # Save the best model
-        if self.best_model_state is not None:
-            self.save_best_model()
+        # Log metrics
+        self.writer.add_scalars(
+            "Discriminator loss", {"Train Discriminator": train_loss_d, "Validation Discriminator": val_loss_d}, epoch
+        )
+        self.writer.add_scalars(
+            f"Generator loss", {"Train Generator": train_loss_g, "Validation Generator": val_loss_g}, epoch
+        )
 
-        self.writer.close()
+        # Save checkpoint at specified intervals
+        if epoch % self.save_interval == 0:
+            self.save_checkpoint(epoch)
+            self.save_snapshot(epoch)
+
+        # Early stopping check
+        if val_loss_g < self.best_val_loss:
+            self.best_val_loss = val_loss_g
+            self.best_model_state = (
+                self.model.state_dict()
+            )  # Store the model's state_dict
+            self.best_epoch = epoch
+            self.epochs_without_improvement = 0
+        else:
+            self.epochs_without_improvement += 1
+            if (
+                self.early_stopping_patience is not None
+                and self.epochs_without_improvement >= self.early_stopping_patience
+            ):
+                print(
+                    f"Early stopping triggered after {self.early_stopping_patience} epochs with no improvement."
+                )
+                break
+
+    # Save the final model
+    self.save_checkpoint(epoch, final=True)
+
+    # Save the best model
+    if self.best_model_state is not None:
+        self.save_best_model()
+
+    self.writer.close()
+    """
 
     def train_epoch(self, epoch):
         self.model.train()
-        running_loss = 0.0
-        running_metrics = 0
+        self.enc.train()
+        self.gen.train()
+        running_loss_d = 0.0
+        running_loss_g = 0.0
         total = 0
 
         train_bar = tqdm(
@@ -128,36 +262,56 @@ class Trainer:
             inputs = inputs.to(self.device)
             labels = labels.to(self.device)
 
-            self.optimizer.zero_grad()
+            """
+            _, fake_discriminator, real_discriminator = self.model(inputs)
+            real_labels = torch.ones(labels.size(0), 1).to(self.device)
+            fake_labels = torch.zeros(labels.size(0), 1).to(self.device)
+            real_loss = self.criterion(real_discriminator, real_labels)
+            fake_loss = self.criterion(fake_discriminator.detach(), fake_labels)
+            loss_d = real_loss + fake_loss
+            self.model.network.discriminator_step(loss_d)
 
-            outputs = self.model(inputs)
-            loss = self.model.criterion(outputs, labels)
+            _, fake_discriminator, _ = self.model(inputs)
+            fake_labels = torch.ones(labels.size(0), 1).to(self.device)
+            loss_g = self.criterion(fake_discriminator, fake_labels)
+            self.model.network.generator_step(loss_g)
+            """
+            l1_loss = torch.nn.L1Loss()
+            w = self.enc(w)
+            fake = self.gen(w, self.train_alpha, self.train_step)
+            recon_loss = l1_loss(fake, labels)
+            loss_g = recon_loss
+            self.opt_gen.zero_grad()
+            loss_g.backward()
+            self.opt_gen.step()
 
-            loss.backward()
+            self.train_step += 1
 
-            self.optimizer.step()
-
-            running_loss += loss.item()
-            performance_metric, n = self.model.epoch_performance_metric(outputs, labels)
-            running_metrics += performance_metric
-            total += n
+            
+            running_loss_g += loss_g.item()
+            #running_loss_d += loss_d.item()
+            total += labels.size(0)
 
             # Update progress bar
             train_bar.set_postfix(
                 {
-                    "Loss": running_loss / total,
-                    f"{self.model.performance_metric_name}": running_metrics / total,
+                    "Loss Discriminator": running_loss_d / total,
+                    "Loss Generator": running_loss_g / total,
                 }
             )
-        epoch_loss = running_loss / total
-        epoch_metric = running_metrics / total
 
-        return epoch_loss, epoch_metric
+        epoch_loss_d = running_loss_d / total
+        epoch_loss_g = running_loss_g / total
+
+        return epoch_loss_d, epoch_loss_g
 
     def validate_epoch(self, epoch):
         self.model.eval()
-        running_loss = 0.0
-        running_metrics = 0
+        self.enc.eval()
+        self.gen.eval()
+        running_loss_d = 0.0
+        running_loss_g = 0.0
+        total = 0
         total = 0
 
         val_bar = tqdm(
@@ -168,38 +322,50 @@ class Trainer:
                 inputs = inputs.to(self.device)
                 labels = labels.to(self.device)
 
-                outputs = self.model(inputs)
-                loss = self.model.criterion(outputs, labels)
+                """
+                _, fake_discriminator, real_discriminator = self.model(inputs)
+                real_labels = torch.ones(labels.size(0), 1).to(self.device)
+                fake_labels = torch.zeros(labels.size(0), 1).to(self.device)
+                real_loss = self.criterion(real_discriminator, real_labels)
+                fake_loss = self.criterion(fake_discriminator, fake_labels)
+                loss_d = real_loss + fake_loss
+                
+                fake_image, fake_discriminator, _ = self.model(inputs)
+                fake_labels = torch.ones(labels.size(0), 1).to(self.device)
+                fake_loss = self.criterion(fake_discriminator, fake_labels)
+                reconstruction_loss = torch.nn.L1Loss()(fake_image, labels)
+                loss_g = reconstruction_loss"""
+                l1_loss = torch.nn.L1Loss()
+                w = self.enc(w)
+                fake = self.gen(w)
+                recon_loss = l1_loss(fake, labels)
+                loss_g = recon_loss
 
-                running_loss += loss.item()
-                performance_metric, n = self.model.epoch_performance_metric(
-                    outputs, labels
-                )
-                running_metrics += performance_metric
-                total += n
+                running_loss_g += loss_g.item()
+                #running_loss_d += loss_d.item()
+                total += labels.size(0)
 
                 # Update progress bar
                 val_bar.set_postfix(
                     {
-                        "Val Loss": running_loss / total,
-                        f"Val {self.model.performance_metric_name}": running_metrics
-                        / total,
+                        "Loss Discriminator": running_loss_d / total,
+                        "Loss Generator": running_loss_g / total,
                     }
                 )
 
-        epoch_loss = running_loss / total
-        epoch_metric = running_metrics / total
+            epoch_loss_d = running_loss_d / total
+            epoch_loss_g = running_loss_g / total
 
-        return epoch_loss, epoch_metric
+        return epoch_loss_d, epoch_loss_g
 
-    def save_snapshot(self, epoch):
+    def save_snapshot(self, epoch, image_size, step, alpha):
         """
         Saves a snapshot of the model at the current epoch.
 
         Args:
             epoch (int): Current epoch number.
         """
-        train_snapshot_name = f"{self.output_name}_epoch_{epoch}_snapshot_train"
+        train_snapshot_name = f"{self.output_name}_epoch_{epoch}_step_{step}_snapshot_train"
         train_iter = iter(self.train_loader)
 
         # Save snapshot for training data
@@ -210,25 +376,15 @@ class Trainer:
         x = x.to(self.device)
         y = y.to(self.device)
 
+        x = F.interpolate(x, size=(image_size, image_size), mode='bilinear', align_corners=False)
+        y = F.interpolate(y, size=(image_size, image_size), mode='bilinear', align_corners=False)
+
+        self.enc.eval()
+        self.gen.eval()
         with torch.no_grad():
-            y_pred = self.model(x)
+            w = self.enc(x)
+            y_pred = self.gen(w, alpha, step)
             path = os.path.join(self.snapshot_dir, train_snapshot_name)
-            self.model.save_snapshot(x, y, y_pred, path, self.device, epoch)
-
-        # Save snapshot for validation data
-        val_snapshot_name = f"{self.output_name}_epoch_{epoch}_snapshot_val"
-        val_iter = iter(self.val_loader)
-
-        x, y = next(val_iter)
-        if len(x.shape) > 2 and x.shape[0] > 1:
-            x = x[0].unsqueeze(0)
-            y = y[0].unsqueeze(0)
-        x = x.to(self.device)
-        y = y.to(self.device)
-
-        with torch.no_grad():
-            y_pred = self.model(x)
-            path = os.path.join(self.snapshot_dir, val_snapshot_name)
             self.model.save_snapshot(x, y, y_pred, path, self.device, epoch)
 
     def save_checkpoint(self, epoch, final=False):

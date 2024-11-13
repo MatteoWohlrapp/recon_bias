@@ -49,6 +49,10 @@ class BaseDataset(Dataset, ABC):
         """
         self.metadata = self.metadata.filter(pl.col("split") == self.split)
         self.metadata = self.metadata.filter(pl.col("type") == self.type)
+        before_size = len(self.metadata.collect())
+        self.metadata = self.metadata.filter(pl.col("width") == 240)
+        self.metadata = self.metadata.filter(pl.col("height") == 240)
+        print(f"Filtered out {before_size - len(self.metadata.collect())} images due to size mismatch")
 
         # Filter by pathology OR
         if (

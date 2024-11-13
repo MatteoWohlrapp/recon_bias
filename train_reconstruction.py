@@ -18,6 +18,7 @@ from src.model.classification.classification_model import (
 )
 from src.model.reconstruction.reconstruction_model import ReconstructionModel
 from src.model.reconstruction.unet import UNet
+from src.model.reconstruction.style_gan import StyleGAN
 from src.model.reconstruction.vgg import VGGReconstructionNetwork, get_configs
 from src.trainer.trainer import Trainer
 from src.utils.transformations import min_max_slice_normalization
@@ -133,13 +134,13 @@ def main():
         num_workers=1,
         sampler=train_sampler,
     )
-    val_loader = DataLoader(
+    """val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=1,
         sampler=val_sampler,
-    )
+    )"""
 
     # Device configuration
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -149,27 +150,20 @@ def main():
     model = model.to(device)
 
     # Model
-    if network_type == "VGG":
-        network = VGGReconstructionNetwork(get_configs("vgg16"), network_path)
-    elif network_type == "UNet":
-        network = UNet()
-    else:
-        raise ValueError(f"Unknown network type: {network_type}")
+    network = StyleGAN()
 
     network = network.to(device)
 
     # Add network to classifier
     model.set_network(network)
 
-    # Optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
     # Initialize the Trainer
     trainer = Trainer(
         model=model,
+        samples=num_train_samples,
         train_loader=train_loader,
-        val_loader=val_loader,
-        optimizer=optimizer,
+        train_dataset=train_dataset,
+        val_loader=None,
         num_epochs=num_epochs,
         device=device,
         log_dir=os.path.join(output_dir, "logs"),
