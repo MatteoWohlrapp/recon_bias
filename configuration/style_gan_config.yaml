@@ -1,5 +1,5 @@
-output_dir: '/lotterlab/users/matteo/code/recon_bias/output'
-output_name: 'styleGAN'
+output_dir: '/vol/aimspace/projects/practical_SoSe24/mri_inr/matteo/code/recon_bias/output'
+output_name: 'styleGAN-bigger-batches'
 save_interval: 2
 
 num_epochs: 150
@@ -8,7 +8,7 @@ batch_size: 16
 num_train_samples: 512
 num_val_samples: 1
 
-data_root: '/lotterlab/users/matteo/data/UCSF-PDGM'
+data_root: '/vol/aimspace/projects/practical_SoSe24/mri_inr/matteo/data/UCSF-PDGM'
 type: 'T2'
 lower_slice: 60
 upper_slice: 130

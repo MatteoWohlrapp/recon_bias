@@ -47,9 +47,12 @@ class Trainer:
         self.critic = Discriminator(512, 1)
         self.enc = ResNetEncoder(512)
         self.gen = Generator(512, 512, 512, 1)
+        self.critic = self.critic.to(device)
+        self.enc = self.enc.to(device)
+        self.gen = self.gen.to(device)
         self.step = None
         self.opt_gen = optim.Adam([{'params': [param for name, param in self.gen.named_parameters() if 'map' not in name]},
-                     {'params': self.gen.map.parameters(), 'lr': 1e-5}], lr=1e-3, weight_decay=1e-4)
+                     {'params': self.gen.map.parameters(), 'lr': 1e-5}], lr=1e-4, weight_decay=1e-5)
         self.opt_critic = optim.Adam(
                 self.critic.parameters(), lr= 1e-3, weight_decay=1e-4
         )
@@ -57,8 +60,8 @@ class Trainer:
         self.val_alpha = 1e-7
         self.train_step = 0
         self.val_step = 0
-        self.BATCH_SIZES = [256,256,128,64,32,16, 8]
-        self.PROGRESSIVE_EPOCHS = [30] * len(self.BATCH_SIZES)
+        self.BATCH_SIZES = [256,256,256,256,256,256,256]
+        self.PROGRESSIVE_EPOCHS = [50] * len(self.BATCH_SIZES)
         self.START_TRAIN_IMG_SIZE = 4
         self.train_dataset = train_dataset
         """
