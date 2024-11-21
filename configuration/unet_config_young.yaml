@@ -1,5 +1,5 @@
 output_dir: './output'
-output_name: 'unet-t1-t2-translation'
+output_name: 'unet-t1-t2-translation-young'
 save_interval: 1
 
 num_epochs: 20

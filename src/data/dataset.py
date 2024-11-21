@@ -49,6 +49,9 @@ class BaseDataset(Dataset, ABC):
         """
         self.metadata = self.metadata.filter(pl.col("split") == self.split)
         self.metadata = self.metadata.filter(pl.col("type") == self.type)
+        #self.metadata = self.metadata.filter(pl.col("sex") == 'F')
+        #self.metadata = self.metadata.filter(pl.col("who_cns_grade") <= 3)
+        #self.metadata = self.metadata.filter(pl.col("age_at_mri") <= 58)
 
         # Filter by pathology OR
         if (

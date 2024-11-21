@@ -200,24 +200,29 @@ class ReconstructionDataset(BaseDataset):
         return undersampled_slice
 
     def _get_item_from_row(self, row):
-        # Load np array from file
+        # Load T2 np array from file
         nifti_img = nib.load(self.data_root + "/" + row["file_path"])
-
-        # Extract the image data as a numpy array
         scan = nifti_img.get_fdata()
         slice = scan[:, :, row["slice_id"]]
         slice_tensor = torch.from_numpy(slice).float()
 
+        # Replace "T2" with "T1" in the file path and load the T1 image
+        t1_file_path = row["file_path"].replace("T2", "T1")
+        t1_nifti_img = nib.load(self.data_root + "/" + t1_file_path)
+        t1_scan = t1_nifti_img.get_fdata()
+        t1_slice = t1_scan[:, :, row["slice_id"]]
+        t1_slice_tensor = torch.from_numpy(t1_slice).float()
+
+        # Apply any transforms if specified
         if self.transform:
             slice_tensor = self.transform(slice_tensor)
+            t1_slice_tensor = self.transform(t1_slice_tensor)
 
-        # undersample image
-        undersampled_tensor = self.undersample_slice(slice_tensor)
-
+        # Add channel dimension to both tensors
         slice_tensor = slice_tensor.unsqueeze(0)
-        undersampled_tensor = undersampled_tensor.unsqueeze(0)
+        t1_slice_tensor = t1_slice_tensor.unsqueeze(0)
 
-        return undersampled_tensor, slice_tensor
+        return t1_slice_tensor, slice_tensor
 
     def get_random_sample(self):
         idx = np.random.randint(0, len(self.metadata))
