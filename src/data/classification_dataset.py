@@ -1,7 +1,9 @@
 import os
 import pathlib
 from typing import Callable, Optional
-
+import fastmri
+from fastmri import fft2c, ifft2c, tensor_to_complex_np
+from fastmri.data.subsample import RandomMaskFunc
 import nibabel as nib
 import numpy as np
 import polars as pl
@@ -9,6 +11,8 @@ import torch
 
 from src.data.dataset import BaseDataset
 from src.utils.labels import diagnosis_map, extract_labels_from_row, sex_map
+
+import matplotlib.pyplot as plt
 
 
 class ClassificationDataset(BaseDataset):
@@ -61,14 +65,17 @@ class ClassificationDataset(BaseDataset):
         scan = nifti_img.get_fdata()
         slice = scan[:, :, row["slice_id"]]
         slice_tensor = torch.from_numpy(slice).float()
-        if self.transform:
-            slice_tensor = self.transform(slice_tensor)
 
         labels = extract_labels_from_row(row, self.age_bins)
 
-        slice_tensor = slice_tensor.unsqueeze(0)
+        if self.transform:
+            slice_tensor = self.transform(slice_tensor)
 
-        return slice_tensor, labels
+        # undersample image
+        undersampled_tensor = self.undersample_slice(slice_tensor)
+        undersampled_tensor = undersampled_tensor.unsqueeze(0)
+
+        return undersampled_tensor, labels
 
     def get_random_sample(self):
         idx = np.random.randint(0, len(self.metadata))
@@ -124,3 +131,99 @@ class ClassificationDataset(BaseDataset):
         os = row["os"]
 
         return os
+    
+    def convert_to_complex(self, image_slice):
+        """
+        Convert a real-valued 2D image slice to complex format.
+
+        Parameters:
+        - image_slice: 2D real-valued image tensor
+
+        Returns:
+        - complex_tensor: Complex-valued tensor with shape [H, W, 2] where the last dimension is (real, imaginary)
+        """
+        complex_tensor = torch.stack(
+            (image_slice, torch.zeros_like(image_slice)), dim=-1
+        )
+
+        return complex_tensor
+
+    def create_radial_mask(self, shape, num_rays=60):
+        """
+        Create a radial mask for undersampling k-space.
+
+        Parameters:
+        - shape: The shape of the mask (H, W)
+        - num_rays: Number of radial rays in the mask
+
+        Returns:
+        - mask: A radial mask with values 0 (masked) and 1 (unmasked)
+        """
+        H, W = shape
+        center = (H // 2, W // 2)
+        Y, X = np.ogrid[:H, :W]
+        mask = np.zeros((H, W), dtype=np.float32)
+
+        # Define angles for rays
+        angles = np.linspace(0, 2 * np.pi, num_rays, endpoint=False)
+
+        for angle in angles:
+            line_x = np.cos(angle)
+            line_y = np.sin(angle)
+            for r in range(max(H, W) // 2):
+                x = int(center[1] + r * line_x)
+                y = int(center[0] + r * line_y)
+                if 0 <= x < W and 0 <= y < H:
+                    mask[y, x] = 1
+
+        return mask
+
+    def apply_radial_mask_to_kspace(self, kspace):
+        """
+        Apply a radial mask to the k-space data.
+
+        Parameters:
+        - kspace: The complex k-space data to mask
+
+        Returns:
+        - undersampled_kspace: The undersampled k-space data
+        """
+        H, W, _ = kspace.shape
+        radial_mask = self.create_radial_mask((H, W))
+
+        radial_mask = torch.from_numpy(radial_mask).to(kspace.device).unsqueeze(-1)
+
+        undersampled_kspace = kspace * radial_mask
+
+        return undersampled_kspace
+
+    def undersample_image_with_radial_mask(self, image_tensor):
+        """
+        Undersample an MRI image using a radial mask on the k-space.
+
+        Parameters:
+        - image_tensor: The 3D PyTorch tensor of image data
+        - slice_index: The index of the slice to undersample
+
+        Returns:
+        - undersampled_image: The reconstructed image after undersampling
+        """
+        # Convert real slice to complex-valued tensor
+        complex_slice = self.convert_to_complex(image_tensor)
+
+        # Perform Fourier transform to go from image space to k-space
+        kspace = fft2c(complex_slice)  # Apply center Fourier transform
+
+        # Apply radial mask to k-space
+        undersampled_kspace = self.apply_radial_mask_to_kspace(kspace)
+
+        # Reconstruct the undersampled image by performing the inverse Fourier transform
+        undersampled_image = ifft2c(undersampled_kspace)
+
+        return undersampled_image
+    
+    def undersample_slice(self, slice: torch.Tensor) -> torch.Tensor:
+        undersampled_slice = self.undersample_image_with_radial_mask(slice)
+        undersampled_slice = fastmri.complex_abs(undersampled_slice)
+
+        return undersampled_slice

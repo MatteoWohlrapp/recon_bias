@@ -1,5 +1,5 @@
 output_dir: './output'
-output_name: 'ttype-rebalanced'
+output_name: 'ttype-rebalanced-undersampled'
 save_interval: 1
 
 num_epochs: 20

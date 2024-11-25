@@ -112,7 +112,7 @@ class TTypeBCEClassifier(ClassifierModel):
         return roc_auc_score(y, x)
 
     def epoch_performance_metric(self, x, y):
-        x = x.detach().numpy()
+        x = x.cpu().detach().numpy()
         target_transform = self.target_transformation(y)
         return self.evaluation_performance_metric(x, target_transform), 1
 
@@ -469,7 +469,7 @@ class AgeCEClassifier(ClassifierModel):
             _, preds = torch.max(x, 1)
             target_transform = self.target_transformation(y)
             return self.evaluation_performance_metric(preds, target_transform), 1
-        x = x.detach().numpy()
+        x = x.cpu().detach().numpy()
         target_transform = self.target_transformation(y)
         return self.evaluation_performance_metric(x, target_transform), 1
 

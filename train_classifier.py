@@ -143,14 +143,14 @@ def main():
         train_dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        num_workers=4,
+        num_workers=8,
         sampler=train_sampler,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=4,
+        num_workers=8,
         sampler=val_sampler,
     )
 

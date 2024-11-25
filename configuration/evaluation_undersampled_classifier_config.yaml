@@ -1,0 +1,28 @@
+data_root: "../../data/UCSF-PDGM"
+output_dir: "./output"
+output_name: "evaluation"
+seed: 42
+os_bins: 4 
+age_bins: [0, 58, 100]
+reconstruction: 
+  lower_slice: 60
+  upper_slice: 130
+  sampling_mask: "radial"
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  model: 
+    - network: "UNet"
+      model_path: "/lotterlab/users/matteo/models/unet-all_20241023_142841/checkpoints/unet-all_20241023_142841_epoch_7.pth"
+classifiers:
+  lower_slice: 60
+  upper_slice: 130
+  type: "T2"
+  pathology: ["edema","non_enhancing"]
+  models: 
+    - type: "TTypeBCEClassifier"
+      network: "ResNet18"
+      model_path: "./output/ttype-rebalanced-undersampled_20241121_102733/checkpoints/ttype-rebalanced-undersampled_20241121_102733_epoch_1.pth"
+    - type: "AgeCEClassifier"
+      network: "ResNet18"
+      model_path: "./output/age-rebalanced-undersampled_20241121_100723/checkpoints/age-rebalanced-undersampled_20241121_100723_epoch_1.pth"
+
