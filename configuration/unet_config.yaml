@@ -1,14 +1,14 @@
 output_dir: './output'
-output_name: 'unet-40'
+output_name: 'unet-male-only'
 save_interval: 1
 
 num_epochs: 20
 learning_rate: 0.0001
 batch_size: 8
-early_stopping_patience: 5
+early_stopping_patience: 3
 
 data_root: '../../data/UCSF-PDGM'
-type: 'T2'
+type: 'FLAIR'
 lower_slice: 60
 upper_slice: 130
 age_bins: [0, 58, 100]

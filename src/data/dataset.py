@@ -38,17 +38,11 @@ class BaseDataset(Dataset, ABC):
         self.age_bins = age_bins
         self.metadata: pl.LazyFrame = pl.scan_csv(data_root + "/metadata.csv")
         self.data = self._prepare_metadata()
-
+    """
     def _prepare_metadata(self):
-        """Prepare the metadata for the dataset.
-
-        This is done by creating a DataFrame that contains the metadata and paths to the relevant files.
-
-        Returns:
-            None
-        """
         self.metadata = self.metadata.filter(pl.col("split") == self.split)
         self.metadata = self.metadata.filter(pl.col("type") == self.type)
+        self.metadata = self.metadata.filter(pl.col("sex") == "F")
 
         # Filter by pathology OR
         if (
@@ -72,6 +66,95 @@ class BaseDataset(Dataset, ABC):
             )
         else:
             self.metadata = self.metadata.collect()
+
+    """
+    """
+
+    # Equal male and female
+    def _prepare_metadata(self):
+        # Filter metadata by split and type
+        self.metadata = self.metadata.filter(pl.col("split") == self.split)
+        self.metadata = self.metadata.filter(pl.col("type") == self.type)
+
+        # Collect counts for male and female from the LazyFrame
+        male_count = self.metadata.filter(pl.col("sex") == "M").collect().height
+        female_count = self.metadata.filter(pl.col("sex") == "F").collect().height
+
+        # Determine the smallest class size
+        smallest_count = min(male_count, female_count)
+
+        # Sample equal male and female
+        male_metadata = (
+            self.metadata.filter(pl.col("sex") == "M")
+            .collect()
+            .sample(n=smallest_count/2, seed=self.seed)
+        )
+        female_metadata = (
+            self.metadata.filter(pl.col("sex") == "F")
+            .collect()
+            .sample(n=smallest_count/2, seed=self.seed)
+        )
+
+        # Combine male and female metadata
+        self.metadata = pl.concat([male_metadata, female_metadata])
+
+        # Apply pathology filtering
+        if self.pathology and len(self.pathology) > 0:
+            pathology_filter = pl.col(self.pathology[0]) == True
+            for path in self.pathology[1:]:
+                pathology_filter |= pl.col(path) == True
+            self.metadata = self.metadata.filter(pathology_filter)
+
+        # Filter by slice range
+        if self.lower_slice:
+            self.metadata = self.metadata.filter(pl.col("slice_id") >= self.lower_slice)
+        if self.upper_slice:
+            self.metadata = self.metadata.filter(pl.col("slice_id") <= self.upper_slice)
+
+        # If a specific number of samples is requested
+        if self.number_of_samples and not self.evaluation:
+            self.metadata = self.metadata.collect().sample(n=self.number_of_samples, seed=self.seed)
+
+
+
+    """
+    # Only male
+    def _prepare_metadata(self):
+        # Filter metadata by split and type
+        self.metadata = self.metadata.filter(pl.col("split") == self.split)
+        self.metadata = self.metadata.filter(pl.col("type") == self.type)
+
+        # Collect counts for male and female from the LazyFrame
+        male_count = self.metadata.filter(pl.col("sex") == "M").collect().height
+        female_count = self.metadata.filter(pl.col("sex") == "F").collect().height
+
+        # Determine the smallest class size
+        smallest_count = min(male_count, female_count)
+
+        # Sample only males with the size of the smallest class
+        self.metadata = (
+            self.metadata.filter(pl.col("sex") == "M")
+            .collect()
+            .sample(n=smallest_count, seed=self.seed)
+        )
+
+        # Apply pathology filtering
+        if self.pathology and len(self.pathology) > 0:
+            pathology_filter = pl.col(self.pathology[0]) == True
+            for path in self.pathology[1:]:
+                pathology_filter |= pl.col(path) == True
+            self.metadata = self.metadata.filter(pathology_filter)
+
+        # Filter by slice range
+        if self.lower_slice:
+            self.metadata = self.metadata.filter(pl.col("slice_id") >= self.lower_slice)
+        if self.upper_slice:
+            self.metadata = self.metadata.filter(pl.col("slice_id") <= self.upper_slice)
+
+        # If a specific number of samples is requested
+        if self.number_of_samples and not self.evaluation:
+            self.metadata = self.metadata.collect().sample(n=self.number_of_samples, seed=self.seed)
+
 
     def __len__(self):
         return len(self.metadata)
