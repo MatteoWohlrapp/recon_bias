@@ -1,5 +1,5 @@
 output_dir: './output'
-output_name: 'unet-male-only'
+output_name: 'unet-4-only'
 save_interval: 1
 
 num_epochs: 20
