@@ -1,5 +1,5 @@
 output_dir: './output'
-output_name: 'unet-4-only'
+output_name: 'unet-tgrade-mix'
 save_interval: 1
 
 num_epochs: 20

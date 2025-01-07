@@ -75,7 +75,7 @@ class BaseDataset(Dataset, ABC):
         # If a specific number of samples is requested
         if self.number_of_samples and not self.evaluation:
             self.metadata = self.metadata.collect().sample(n=self.number_of_samples, seed=self.seed)
-    """
+
     """
     # Equal male and female
     def _prepare_metadata(self):
@@ -122,8 +122,6 @@ class BaseDataset(Dataset, ABC):
         if self.number_of_samples and not self.evaluation:
             self.metadata = self.metadata.collect().sample(n=self.number_of_samples, seed=self.seed)
 
-
-
     """
     # Only four
     def _prepare_metadata(self):
@@ -161,7 +159,7 @@ class BaseDataset(Dataset, ABC):
         # If a specific number of samples is requested
         if self.number_of_samples and not self.evaluation:
             self.metadata = self.metadata.collect().sample(n=self.number_of_samples, seed=self.seed)
-
+    """
     def __len__(self):
         return len(self.metadata)
 
